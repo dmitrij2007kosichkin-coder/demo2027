@@ -74,19 +74,19 @@ echo "[OK] Chrony configured with pool 172.16.1.1"
 # ============================================================
 # 6. SSH — установить Port 2027
 # ============================================================
-SSHD_CONF="/etc/openssh/sshd_config"
-if [ -f "$SSHD_CONF" ]; then
-    # Если строка Port существует (в любом виде), заменить её; иначе добавить
-    if grep -qE '^\s*#*\s*Port\s+' "$SSHD_CONF"; then
-        sed -i -E 's/^\s*#*\s*Port\s+.*/Port 2027/' "$SSHD_CONF"
-    else
-        echo "Port 2027" >> "$SSHD_CONF"
-    fi
-    systemctl restart sshd
-    echo "[OK] sshd Port set to 2027"
-else
-    echo "[ERROR] $SSHD_CONF not found"
-fi
+#SSHD_CONF="/etc/openssh/sshd_config"
+#if [ -f "$SSHD_CONF" ]; then
+#    # Если строка Port существует (в любом виде), заменить её; иначе добавить
+#    if grep -qE '^\s*#*\s*Port\s+' "$SSHD_CONF"; then
+#        sed -i -E 's/^\s*#*\s*Port\s+.*/Port 2027/' "$SSHD_CONF"
+#    else
+#        echo "Port 2027" >> "$SSHD_CONF"
+#    fi
+#    systemctl restart sshd
+#    echo "[OK] sshd Port set to 2027"
+#else
+#    echo "[ERROR] $SSHD_CONF not found"
+#fi
 
 # ============================================================
 # 7. Установка Yandex Browser
