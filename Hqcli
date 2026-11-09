@@ -24,35 +24,7 @@ fi
 # ============================================================
 # 2. Ввод в домен (автоматически)
 # ============================================================
-# Параметры домена (при необходимости измените)
-AD_DOMAIN="au-team.alt"          
-AD_WORKGROUP="AU-TEAM"           
-AD_USER="administrator"          
-AD_PASS='P@ssw0rd'               
-
-# Имя компьютера (короткое, без домена)
-AD_HOSTNAME="$(hostname -s)"
-
-echo "[INFO] Joining domain: $AD_DOMAIN as $AD_HOSTNAME"
-
-# Проверка, что DNS резолвит домен (важно!)
-if ! getent hosts "$AD_DOMAIN" >/dev/null 2>&1; then
-    echo "[ERROR] Cannot resolve $AD_DOMAIN. Configure DNS to point to the domain controller first."
-    exit 1
-fi
-
-# Установка пакета (если ещё не установлен)
-if ! rpm -q task-auth-ad-sssd >/dev/null 2>&1; then
-    apt-get install -y task-auth-ad-sssd
-fi
-
-# Ввод в домен
-system-auth write ad "$AD_DOMAIN" "$AD_HOSTNAME" "$AD_WORKGROUP" "$AD_USER" "$AD_PASS"
-
-echo "[OK] Domain join command executed. A reboot is required to apply all settings."
-echo "[INFO] PLEASE REBOOT NOW and run the script again to continue from step 3."
-exit 0 # Скрипт останавливается здесь, чтобы вы перезагрузились и запустили его снова
-
+# Параметры домена (при необходимости 
 # ============================================================
 # 3. roleadd — выполнять ПОСЛЕ ввода в домен и перезагрузки
 # ============================================================
