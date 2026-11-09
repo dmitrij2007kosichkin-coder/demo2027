@@ -5,7 +5,7 @@
 set -e  # при ошибке прерывать выполнение
 
 # 1. mdadm
-echo "DEVICE partitions" > /etc/mdadm.conf
+echo "DEVICE partitions" >> /etc/mdadm.conf
 
 # 2. NFS
 # Убедитесь, что пакет установлен (в задании обычно уже установлен, на всякий случай)
