@@ -36,22 +36,75 @@ fi
 roleadd hq wheel
 
 # ============================================================
-# 4. /etc/sudoers — безопасное добавление через /etc/sudoers.d/
+# 4. /etc/sudoers — точечная правка (НЕ через sudoers.d)
 # ============================================================
-# Не редактируем /etc/sudoers напрямую, а создаём отдельный файл в /etc/sudoers.d/
-SUDO_FILE="/etc/sudoers.d/hq-cli"
-cat > "$SUDO_FILE" <<'EOF'
-User_Alias WHEEL_USERS = %wheel, %AU-TEAM\\hq
-Cmnd_Alias SHELLCMD = /usr/bin/id, /usr/bin/cat, /bin/grep
-WHEEL_USERS ALL=(ALL:ALL) SHELLCMD
-EOF
-chmod 440 "$SUDO_FILE"
-# Проверка синтаксиса
-if visudo -cf "$SUDO_FILE"; then
-    echo "[OK] sudoers.d/hq-cli created and validated"
+SUDOERS="/etc/sudoers"
+BACKUP="/etc/sudoers.bak.$(date +%Y%m%d%H%M%S)"
+
+cp -a "$SUDOERS" "$BACKUP"
+echo "[OK] Backup: $BACKUP"
+
+# --- 4.1 User_Alias WHEEL_USERS ---
+# Ищем строку, где уже есть User_Alias WHEEL_USERS (закомментированную или нет),
+# и заменяем её на нужную. Если такой строки нет — добавляем после последнего User_Alias.
+if grep -qE '^\s*#*\s*User_Alias\s+WHEEL_USERS\s*=' "$SUDOERS"; then
+    sed -i -E 's|^\s*#*\s*User_Alias\s+WHEEL_USERS\s*=.*|User_Alias WHEEL_USERS = %wheel, %AU-TEAM\\\\hq|' "$SUDOERS"
 else
-    echo "[ERROR] sudoers syntax error, please check $SUDO_FILE"
-    rm -f "$SUDO_FILE"
+    if grep -qE '^\s*User_Alias\s+' "$SUDOERS"; then
+        # Вставляем после последней строки User_Alias
+        awk '
+            /^[[:space:]]*User_Alias[[:space:]]+/ { last=NR }
+            { lines[NR]=$0 }
+            END {
+                for (i=1; i<=NR; i++) {
+                    print lines[i]
+                    if (i==last) print "User_Alias WHEEL_USERS = %wheel, %AU-TEAM\\\\hq"
+                }
+            }
+        ' "$SUDOERS" > "${SUDOERS}.tmp" && mv "${SUDOERS}.tmp" "$SUDOERS"
+    else
+        printf '\nUser_Alias WHEEL_USERS = %%wheel, %%AU-TEAM\\\\\\\\hq\n' >> "$SUDOERS"
+    fi
+fi
+
+# --- 4.2 Cmnd_Alias SHELLCMD — дописать после последнего Cmnd_Alias ---
+NEW_CMND='Cmnd_Alias SHELLCMD = /usr/bin/id, /usr/bin/cat, /bin/grep'
+
+# Удаляем возможные старые определения SHELLCMD (чтобы не было дублей)
+sed -i -E '/^\s*#*\s*Cmnd_Alias\s+SHELLCMD\s*=/d' "$SUDOERS"
+
+if grep -qE '^\s*Cmnd_Alias\s+' "$SUDOERS"; then
+    # Вставляем после последней строки Cmnd_Alias
+    awk -v new="$NEW_CMND" '
+        /^[[:space:]]*Cmnd_Alias[[:space:]]+/ { last=NR }
+        { lines[NR]=$0 }
+        END {
+            for (i=1; i<=NR; i++) {
+                print lines[i]
+                if (i==last) print new
+            }
+        }
+    ' "$SUDOERS" > "${SUDOERS}.tmp" && mv "${SUDOERS}.tmp" "$SUDOERS"
+else
+    # Если Cmnd_Alias вообще нет — просто добавляем в конец
+    printf '\n%s\n' "$NEW_CMND" >> "$SUDOERS"
+fi
+
+# --- 4.3 Строка правила для WHEEL_USERS (раскомментировать/переписать) ---
+RULE='WHEEL_USERS ALL=(ALL:ALL) SHELLCMD'
+if grep -qE '^\s*#*\s*WHEEL_USERS\s+ALL\s*=' "$SUDOERS"; then
+    sed -i -E "s|^\s*#*\s*WHEEL_USERS\s+ALL\s*=.*|$RULE|" "$SUDOERS"
+else
+    # Если строки нет — добавляем после строки с определением User_Alias WHEEL_USERS
+    sed -i -E "/^\s*User_Alias\s+WHEEL_USERS\s*=/a\\$RULE" "$SUDOERS"
+fi
+
+# --- 4.4 Проверка синтаксиса ---
+if visudo -cf "$SUDOERS"; then
+    echo "[OK] /etc/sudoers updated and validated"
+else
+    echo "[ERROR] sudoers syntax error — restoring backup"
+    cp -a "$BACKUP" "$SUDOERS"
     exit 1
 fi
 
@@ -104,10 +157,3 @@ fi
 # ============================================================
 cat /etc/fstab
 df -h
-
-
-Напиши чтобы в /etc/sudoers он раскоментировал и переписал только эти строчки а не весь файл
-User_Alias WHEEL_USERS = %wheel, %AU-TEAM\\hq
-WHEEL_USERS ALL=(ALL:ALL) SHELLCMD
-
-А cmnd_alias дописал после всех остальных cmnd_alias (Cmnd_Alias SHELLCMD = /usr/bin/id, /usr/bin/cat, /bin/grep)
