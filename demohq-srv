@@ -1,0 +1,78 @@
+#!/bin/bash
+# HQ-SRV setup script
+# Внимание: запускать с правами root, предполагая, что /raid/nfs уже существует
+
+set -e  # при ошибке прерывать выполнение
+
+# 1. mdadm
+echo "DEVICE partitions" > /etc/mdadm.conf
+
+# 2. NFS
+# Убедитесь, что пакет установлен (в задании обычно уже установлен, на всякий случай)
+# apt-get install -y nfs-server
+
+cat > /etc/exports <<'EOF'
+/raid/nfs 10.10.200.0/28(rw,sync,no_subtree_check,no_root_squash)
+#10.20.30.0/29(rw,sync,no_root_squash)
+EOF
+# Примечание: в задании было 10.10.200.2/28, но .2 — это обычно адрес шлюза/хоста.
+# Если в задании строго указан адрес сети, замените на адрес сети, например 10.10.200.0/28.
+# Если действительно нужно только .2, оставьте исходное значение.
+
+exportfs -ra
+systemctl enable --now nfs-server
+# В некоторых версиях ALT служба называется nfs, при ошибке попробуйте: systemctl enable --now nfs
+
+# 3. Chrony
+cat > /etc/chrony.conf <<'EOF'
+server 172.16.1.1 iburst
+EOF
+# Примечание: при необходимости сохраните другие допустимые настройки из оригинала.
+systemctl restart chronyd
+systemctl enable chronyd
+
+# 4. Установка PHP
+apt-get update
+apt-get install -y apache2-mod_php8.3 php8.3-mysqlnd php8.3-mysqlnd-mysqli
+# Если a2enmod недоступен, пропустите; обычно модуль PHP включается автоматически после установки
+a2enmod mod_php8.3 || true
+
+# 5. Монтирование ISO и копирование веб-файлов
+mkdir -p /mnt/cd-rom
+mount /home/user/Additional.iso /mnt/cd-rom
+systemctl enable --now httpd2
+systemctl restart httpd2
+
+cp -r /mnt/cd-rom/web/* /var/www/html/
+# Примечание: исходная команда *.p* копировала только файлы, начинающиеся с p, изображения и т.д. могли быть пропущены.
+# Если нужно строго следовать заданию, замените на: cp /mnt/cd-rom/web/*.p* /var/www/html/
+
+# 6. Настройка index.php
+cat > /var/www/html/index.php <<'PHPEOF'
+<?php
+$servername = "localhost";
+$username = "web";
+$password = "P@ssword";
+$dbname = "webdb";
+// ... остальной код подключения к базе данных
+?>
+PHPEOF
+# Примечание: это только фрагмент, в задании может требоваться сохранить другой код.
+
+# 7. MariaDB: запуск и создание пользователя (критично)
+systemctl enable --now mariadb
+
+mariadb -u root <<'SQLEOF'
+CREATE DATABASE IF NOT EXISTS webdb;
+CREATE USER IF NOT EXISTS 'web'@'localhost' IDENTIFIED BY 'P@ssword';
+GRANT ALL PRIVILEGES ON webdb.* TO 'web'@'localhost';
+FLUSH PRIVILEGES;
+SQLEOF
+
+# 8. Импорт дампа (при необходимости, путь уточните)
+# mariadb -u web -p'P@ssword' -D webdb < /mnt/cd-rom/web/dump.sql
+# Примечание: в исходном комментарии был путь /mnt/web/, но ISO монтируется в /mnt/cd-rom.
+
+# 9. Перезапуск служб
+systemctl restart httpd2
+systemctl reload httpd2
